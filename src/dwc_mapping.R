@@ -164,12 +164,12 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
 #' ### Pre-processing
 distribution <- raw_data
 
-#' The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium (Flanders, Wallonia and the Brussels-Capital Region).
-#' Both national and regional information is required in the checklist. In the `distribution.csv`, we first provide the information on a national level for pathway, status and dates; followed by specific information for the regions. 
-#' However, information regarding pathway, status, first and last recorded observation applies to the distribution in Belgium as a whole.
-#' It is impossible to extrapolate this information for the regions, unless the species is present in only one region.
-#' In this case, we can assume pathway, status and date relate to that region and so we can keep lines for Belgium and for the specific region populated for all DwC terms (see #45)
-#' When a species is present in more than one region, we decided to only provide occurrenceStatus for the regional information, and specify all other information regarding pathway and dates only for Belgium
+#' The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium (Flanders, Wallonia and the Brussels-Capital Region, contained in `raw_presence_fl`, `raw_presence_wa` and `raw_presence_br` respectively).
+#' Information regarding pathway, status, first and last recorded observation applies to the distribution in Belgium as a whole.
+#' Both national and regional information is required in the checklist. In the `distribution.csv`, we first provide the information on a national level for pathway, presence status and dates; followed by specific information for the regions. 
+#' However, it is impossible to extrapolate the date and pathway information for the regions, unless the species is present in only one region. 
+#' In this case, we can assume pathway, presence status and date relate to that region and so we can keep lines for Belgium and for the specific region populated for all DwC terms (see #45). 
+#' When a species is present in more than one region, we decided to only provide occurrenceStatus for the regional information, and specify all other information regarding pathway and dates only for Belgium.
 
 #' Thus, we need to specify when a species is present in only one of the regions.
 #' We generate 4 new columns: `Flanders`, `Brussels`,`Wallonia` and `Belgium`. 
