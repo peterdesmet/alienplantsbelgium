@@ -159,11 +159,14 @@ kable(head(taxon))
 #' Save to CSV:
 write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
 
-#' ## Create distribution extension
+#' ## eventDate, occurrenceStatus and invasion stage
+#'
+#' Before we start mapping the distribution and description extensions, we first focus on the mapping of three specific terms: 
+#' - occurrenceStatus (distribution)
+#' - eventDate (distribution)
+#' - invasion stage (description, not a Darwin Core term)
 #' 
-#' ### Pre-processing
-distribution <- raw_data
-
+#' 
 #' The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium (Flanders, Wallonia and the Brussels-Capital Region, contained in `raw_presence_fl`, `raw_presence_wa` and `raw_presence_br` respectively).
 #' Information regarding pathway, status, first and last recorded observation applies to the distribution in Belgium as a whole.
 #' Both national and regional information is required in the checklist. In the `distribution.csv`, we first provide the information on a national level for pathway, presence status and dates; followed by specific information for the regions. 
