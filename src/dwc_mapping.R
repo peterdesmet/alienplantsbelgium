@@ -166,6 +166,7 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
 #' - eventDate (distribution)
 #' - invasion stage (description, not a Darwin Core term)
 #' 
+#' ### eventDate
 #' 
 #' The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium (Flanders, Wallonia and the Brussels-Capital Region, contained in `raw_presence_fl`, `raw_presence_wa` and `raw_presence_br` respectively).
 #' Information regarding pathway, status, first and last recorded observation applies to the distribution in Belgium as a whole.
@@ -205,6 +206,27 @@ kable(matrix(
   ))
 ))
 
+#' As we need to populate one line per region, this will translate into the following (intermediate) table: 
+#¸' (indicate that each line in the raw data is copied three four times)
+kable(matrix(
+  c(
+    "X", NA, NA, "Flanders", "S",
+    "X", NA, NA, "Brussels", "NA",
+    "X", NA, NA, "Wallonia", "NA",
+    "X", NA, NA, "Belgium", "S",
+    NA, "X", NA, "Flanders", "NA",
+    NA, "X", NA, "Brussels", "S",
+    NA, "X", NA, "Wallonia", "NA",
+    NA, "X", NA, "Belgium", "S",
+    "...", "...", "...", "...", "..."),
+  ncol = 5,
+  byrow = TRUE,
+  dimnames = list(c(1:9), c(
+    "raw_presence_fl",
+    "raw_presence_br", 
+    "raw_presence_wa",
+    "region",
+    "presence"))))
 #' We translate this to the distribution extension:
 distribution %<>% 
   mutate(Flanders = case_when(
