@@ -227,6 +227,24 @@ kable(matrix(
     "raw_presence_wa",
     "region",
     "presence"))))
+
+
+#' ### occurrenceStatus and invasion stage
+
+#' In some cases, the mapping of these terms is closely linked. This means that, how a specific term is mapped depends on the content of the other term.
+#' To keep things as simple as possible, we describe the _idea_ behind the mapping process of these terms here. 
+#' This is necessary to understand _why_ we do what we do further in the mapping process.
+#' 
+#' Information for `occurrenceStatus`, `eventDate` and `invasion stage` can be found in `raw_presence`, `raw_`
+
+
+#' ## Create distribution extension
+#' 
+#' ### Pre-processing
+distribution <- raw_data
+
+
+
 #' We translate this to the distribution extension:
 distribution %<>% 
   mutate(Flanders = case_when(
