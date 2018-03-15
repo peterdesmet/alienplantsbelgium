@@ -215,47 +215,6 @@ kable(matrix(
   ))
 ))
 
-#' As we need to populate one line per region, this will translate into the following (intermediate) table: 
-#¸' (indicate that each line in the raw data is copied three four times)
-kable(matrix(
-  c(
-    "X", NA, NA, "Flanders", "S",
-    "X", NA, NA, "Brussels", "NA",
-    "X", NA, NA, "Wallonia", "NA",
-    "X", NA, NA, "Belgium", "S",
-    NA, "X", NA, "Flanders", "NA",
-    NA, "X", NA, "Brussels", "S",
-    NA, "X", NA, "Wallonia", "NA",
-    NA, "X", NA, "Belgium", "S",
-    "...", "...", "...", "...", "..."),
-  ncol = 5,
-  byrow = TRUE,
-  dimnames = list(c(1:9), c(
-    "raw_presence_fl",
-    "raw_presence_br", 
-    "raw_presence_wa",
-    "region",
-    "presence"))))
-
-
-#' ### occurrenceStatus and invasion stage
-
-#' In some cases, the mapping of these terms is closely linked. This means that, how a specific term is mapped depends on the content of the other term.
-#' To keep things as simple as possible, we describe the _idea_ behind the mapping process of these terms here. 
-#' This is necessary to understand _why_ we do what we do further in the mapping process.
-#' 
-#' Information for `occurrenceStatus`, `eventDate` and `invasion stage` can be found in `raw_presence`, `raw_`
-
-
-#' ## Create distribution extension
-#' 
-#' ### Pre-processing
-distribution <- raw_data
-
-
-
-#' We translate this to the distribution extension:
-distribution %<>% 
 #' We translate this to the mapping:
 raw_data %<>% 
   mutate(Flanders = case_when(
@@ -300,8 +259,6 @@ raw_data %<>% filter (!presence == "NA")
 
 #' This presence status will be used for further mapping of `occurrenceStatus` and `eventDate`in the distribution extension.
 
-#' #### taxonID
-distribution %<>% mutate(taxonID = raw_taxonID)
 #' ### invasion stage
 
 #' The information for invasion stage is contained in `raw_d_n`:
@@ -329,15 +286,6 @@ raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
 
 #' However, we need a more complex mapping for `Ext.` and `Ext./Cas.`:
 #' 
-#' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
-distribution %<>% mutate(occurrenceStatus = recode(presence,
-  "S" = "present",
-  "M" = "present",
-  "?" = "presence uncertain",
-  "NA" = "absent",
-  .default = "",
-  .missing = "absent"
-))
 #' - Extinct: introduced taxa that once were naturalized (usually rather locally) but that have not been confirmed in recent times in their known localities. Only taxa that are certainly extinct are indicated as such.   
 #' - Extinct/casual: Some of these extinct taxa are no longer considered as naturalized but still occur as casuals; such taxa are indicated as “Ext./Cas.” (for instance _Tragopogon porrifolius_).
 #' 
