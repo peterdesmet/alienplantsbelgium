@@ -385,24 +385,24 @@ raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
 #' 1. Save two subsets of `raw_data` as a separate datasets:
 #' - `extinct` = extinct species exclusively.
 #' - `ext.cas` = extinct/casual species exclusively
-#' 2. Distribution extension (paragraph xxx)
-#' - Bind `distribution` and `extinct` by rows
-#' - Map all necessary Darwin Core terms. 
-#' - For `occurrenceStatus` and `eventDate`
-#'  - Values are already mapped for taxa != extinct
-#'  - specify `occurrenceStatus` and `eventDate` for extinct species
-#' 3. Map invasion stage (part of the mapping of the description extension, paragraph xxx`)
-#' - Bind `invasion stage`, `extinct` and `ext.cas` by rows
-#' - invasion stage is already mapped for taxa != extinct ()
-#' - specify invasion stage for extinct and extinct/casual species. 
+#' 2. Distribution extension (`distribution`, a copy of `raw_data`)
+#' - `occurrenceStatus` and `eventDate` are already mapped for all species **within** the range of the first and most recent record) (`raw_occurrenceStatus` and `raw_eventDate`).  
+#' - Add `occurrenceStatus` and `eventDate` to `extinct`. (for all extinct species **after** the most recent record)
+#' - Bind `distribution` and `extinct` by rows.
+#' - Map the other Darwin Core terms.
+#' 3. Map invasion stage (part of the description extension, paragraph xxx`)
+#' - invasion stage is already mapped for all species **within** the range of the first and most recent record) (`raw_invasion_stage`)
+#' - Add invasion stage to `extinct` and `ext.cas`. 
+#' - Bind `invasion stage`, `extinct`, and `ext.cas`
+#' - Map pathway of introduction and native range, create description extension.
 
 #' This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
 
 #' Include this in the Rmd: ![_Schematic overview of the mapping process_](mapping_scheme_MAP.png)
 
 #' #### Create `extinct` and `ext-cas`:
-extinct <- raw_data %>% filter(invasion_stage == "Ext.")
-ext.cas <- raw_data %>% filter(invasion_stage == "Ext./Cas.")
+extinct <- raw_data %>% filter(raw_d_n == "Ext.")
+ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
 
 
 #' Populate `eventDate` only when `presence` = `S`.
