@@ -295,6 +295,7 @@ raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
 #' 
 #' This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
 
+#' Include this in the Rmd: ![_Schematic overview of the mapping process_](mapping_scheme_MAP.png)
 
 #' This translates into the following stepwise approach: 
 
