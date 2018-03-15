@@ -348,12 +348,22 @@ distribution %<>% mutate(occurrenceStatus = recode(presence,
 #' This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
 
 
+#' This translates into the following stepwise approach: 
 
-#' Overview of `occurrenceStatus` for each location x presence combination
-distribution %>% select (location, presence, occurrenceStatus) %>%
-  group_by_all() %>%
-  summarize(records = n()) %>% 
-  kable()
+#' 1. Clean `raw_fr` and `raw_mrr` somehow, as we need clean date information in both the distribution and descritpion extension
+#' 2. Save two subsets of `raw_data` as a separate datasets:
+#' - `extinct` = all extinct species.
+#' - `ext.cas` = all extinct/casual species
+#' 3. Map the distribution extension (`distribution`, a copy of `raw_data`)
+#' - Add `occurrenceStatus` and `eventDate` to `distribution` for all occurrences **within** the specified time frame (`eventDate` = first - most recent observation).
+#' - Add `occurrenceStatus` and `eventDate` to `extinct` for all occurrences **after** the specified time frame (`eventDate` = most recent observation - now).
+#' - Merge `distribution` and `extinct`. 
+#' - Map the other Darwin Core terms
+#' 3. Map the description extension (`description`, a copy of `raw_data`)
+#' - Add `invasion stage` to `raw_data` for all occurrences **within** the specified time frame (`eventDate` = first - most recent observation)
+#' - Add `invasion stage` to `extinct` and `ext.cas` for all occurrences **after** the specified time frame (`eventDate` = most recent observation - now).
+#' - Merge `distribution`, `extinct` and`ext.cas`.
+#' - Map the other Darwin Core terms
 
 #' #### threatStatus
 #' #### establishmentMeans
