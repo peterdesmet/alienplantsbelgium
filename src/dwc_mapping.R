@@ -487,53 +487,13 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 
 #' ## Create description extension
 #' 
-#' In the description extension we want to include **origin** (`raw_d_n`), **native range** (`raw_origin`) and **pathway** (`raw_v_i``) information. We'll create a separate data frame for all and then combine these with union.
+#' In the description extension we want to include **invasion stage** (`raw_d_n`), **native range** (`raw_origin`) and **pathway** (`raw_v_i``) information. We'll create a separate data frame for all and then combine these with union.
 #' 
 #' ### Pre-processing
 #' 
-#' #### Origin
+#' #### Invasion stage
 #' 
-#' `origin` describes if a species is native in a distribution or not. Since Darwin Core has no `origin` field yet as suggested in [ias-dwc-proposal](https://github.com/qgroom/ias-dwc-proposal/blob/master/proposal.md#origin-new-term), we'll add this information in the description extension.
-#' 
-#' Create new data frame:
-origin <- raw_data
-
-#' Create `description` from `raw_d_n`:
-origin %<>% mutate(description = raw_d_n)
-
-#' Create a `type` field to indicate the type of description:
-origin %<>% mutate(type = "origin")
-
-#' Clean values:
-origin %<>% mutate(description = 
-  str_replace_all(description, "\\?", ""), # Strip ?
-  description = str_trim(description) # Clean whitespace
-)
-
-#' Map values using [this vocabulary](https://github.com/qgroom/ias-dwc-proposal/blob/master/vocabulary/origin.tsv):
-origin %<>% mutate(description = recode(description,
-  "Cas." = "vagrant",
-  "Nat." = "introduced",
-  "Ext." = "",
-  "Inv." = "",
-  "Ext./Cas." = "",
-  .default = "",
-  .missing = ""
-))
-
-#' Show mapped values:
-origin %>%
-  select(raw_d_n, description) %>%
-  group_by(raw_d_n, description) %>%
-  summarize(records = n()) %>%
-  arrange(raw_d_n) %>%
-  kable()
-
-#' Keep only non-empty descriptions:
-origin %<>% filter(!is.na(description) & description != "")
-
-#' Preview data:
-kable(head(origin))
+#' Create a new data frame:
 
 #' #### Native range
 #' 
@@ -727,7 +687,7 @@ pathway_desc %>%
 pathway_desc %<>% filter(!is.na(description) & description != "")
 
 #' #### Union origin, native range and pathway:
-description_ext <- bind_rows(origin, native_range, pathway_desc)
+description_ext <- bind_rows(invasion_stage, native_range, pathway_desc)
 
 #' ### Term mapping
 #' 
