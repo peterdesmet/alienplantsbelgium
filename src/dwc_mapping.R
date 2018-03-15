@@ -161,18 +161,18 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
 
 #' ## eventDate, occurrenceStatus and invasion stage
 #'
-#' Before we start mapping the distribution and description extensions, we focus on three specific issues:
-#' - integrate regional versus national information
-#' - invasion stage (description extension)
-#' - clean date information
+#' Before we start mapping the distribution and description extensions, we focus on three specific terms:
+#' 1. occurrenceStatus (distribution extension)
+#' 2. eventDate (distribution extension)
+#' 3. invasion stage (description extension)
 
 #' Why do we provide this information here?
 #' 
 #' 1. Information on the occurrences is given for the **regions**, while date information is given for **Belgium** as a whole. Some transformations and clarifications are needed.
-#' 2. In some cases, the mapping of `eventDate`, `presence status` and `invasion stage` is linked (e.g. the `occurrenceStatus` of a species depends on its `invasion stage`. 
-#' 3. Resulting from 2., clean date information is needed for both the distribution and description extension. We do de cleaning step here.
+#' 2. Date information is needed for both the distribution and description extension (see 3). We do de cleaning and mapping.
+#' 3. In some cases, the mapping of `eventDate`, `presence status` and `invasion stage` is linked (e.g. the `occurrenceStatus` of a species depends on its `invasion stage`. 
 #' 
-#' ### Regional versus national information
+#' ### occurrenceStatus
 #' 
 #' The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium: Flanders, Wallonia and the Brussels-Capital Region, contained in `raw_presence_fl`, `raw_presence_wa` and `raw_presence_br` respectively.
 #' Information regarding the first/last recorded observation applies to the distribution in Belgium as a whole.
@@ -257,7 +257,89 @@ raw_data %<>% rename ("location" = "key", "presence" = "value")
 #' Remove species for which we lack presence information (i.e. `presence` = `NA``)
 raw_data %<>% filter (!presence == "NA")
 
-#' This presence status will be used for further mapping of `occurrenceStatus` and `eventDate`in the distribution extension.
+#' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
+raw_data %<>% mutate(occurrenceStatus = recode(presence,
+                                                   "S" = "present",
+                                                   "M" = "present",
+                                                   "?" = "presence uncertain",
+                                                   "NA" = "absent",
+                                                   .default = "",
+                                                   .missing = "absent"
+))
+
+
+#' Remove records with `absent`:
+raw_data %<>% filter (!occurrenceStatus == "absent")
+
+#' Overview of `occurrenceStatus` for each location x presence combination
+raw_data %>% select (location, presence, occurrenceStatus) %>%
+  group_by_all() %>%
+  summarize(records = n()) %>% 
+  kable()
+
+#' #### eventDate
+
+#' Create `start_year` from `raw_fr` (first record):
+raw_data %<>% mutate(start_year = raw_fr)
+
+#' Clean values:
+raw_data %<>% mutate(start_year = 
+                       str_replace_all(start_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
+)
+
+#' Create `end_year` from `raw_mrr` (most recent record):
+raw_data %<>% mutate(end_year = raw_mrr)
+
+#' Clean values:
+raw_data %<>% mutate(end_year = 
+                       str_replace_all(end_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
+)
+
+#' If `end_year` is `Ann.` or `N` use current year:
+current_year = format(Sys.Date(), "%Y")
+raw_data %<>% mutate(end_year = recode(end_year,
+                                       "Ann." = current_year,
+                                       "N" = current_year)
+)
+
+#' Show reformatted values for both `raw_fr` and `raw_mrr`:
+raw_data %>%
+  select(raw_fr, start_year) %>%
+  rename(raw_year = raw_fr, formatted_year = start_year) %>%
+  union( # Union with raw_mrr. Will also remove duplicates
+    raw_data %>%
+      select(raw_mrr, end_year) %>%
+      rename(raw_year = raw_mrr, formatted_year = end_year)
+  ) %>%
+  filter(nchar(raw_year) != 4) %>% # Don't show raw values that were already YYYY
+  arrange(raw_year) %>%
+  kable()
+
+#'Check if any `start_year` fall after `end_year` (expected to be none):
+raw_data %>%
+  select(start_year, end_year) %>%
+  mutate(start_year = as.numeric(start_year)) %>%
+  mutate(end_year = as.numeric(end_year)) %>%
+  group_by(start_year, end_year) %>%
+  summarize(records = n()) %>%
+  filter(start_year > end_year) %>%
+  kable()
+
+#' Combine `start_year` and `end_year` in an ranged `Date` (ISO 8601 format). If any those two dates is empty or the same, we use a single year, as a statement when it was seen once (either as a first record or a most recent record):
+raw_data %<>% mutate(Date = 
+                           case_when(
+                             start_year == "" & end_year == "" ~ "",
+                             start_year == ""                  ~ end_year,
+                             end_year == ""                    ~ start_year,
+                             start_year == end_year            ~ start_year,
+                             TRUE                              ~ paste(start_year, end_year, sep = "/")
+                           )
+)
+
+#' Populate `eventDate` only when `presence` = `S`.
+raw_data %<>% mutate (eventDate = case_when(
+  presence == "S" ~ Date,
+  TRUE ~ ""))
 
 #' ### invasion stage
 
@@ -289,127 +371,39 @@ raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
 #' - Extinct: introduced taxa that once were naturalized (usually rather locally) but that have not been confirmed in recent times in their known localities. Only taxa that are certainly extinct are indicated as such.   
 #' - Extinct/casual: Some of these extinct taxa are no longer considered as naturalized but still occur as casuals; such taxa are indicated as “Ext./Cas.” (for instance _Tragopogon porrifolius_).
 #' 
-#' For these species, we include the invasion stage **within** the specified time frame (`eventDate` = first - most recent observation) and **after** the last observation (`eventDate` = most recent observation - now).
-#' For extinct species, We also need to indicate that this species is absent **after** its last observation. 
-#' Thus, for the mapping of the distribution and the description extenion, we need to combine the information from different fields in raw_data. 
-#' 
+#' For these species, we include the invasion stage **within** the specified time frame (`eventDate` = first - most recent observation)...
+raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
+   "Ext." = "established",            # `naturalized` is replaced by `established`
+   "Ext./Cas." = "established"))      # `naturalized` is replaced by `established`
+
+
+#' ...and **after** the last observation (`eventDate` = most recent observation - current date).
+#' For extinct species, we also need to specify that a species is absent **after** the last observation. 
+#' Thus, for some taxa, we need to add some **extra lines** with extra nformation on `invasion stage`, `eventDate` (most recent observation - current date) and `occurrenceStatus`.
+#' For this, we use a stepwise approach:
+
+#' 1. Save two subsets of `raw_data` as a separate datasets:
+#' - `extinct` = extinct species exclusively.
+#' - `ext.cas` = extinct/casual species exclusively
+#' 2. Distribution extension (paragraph xxx)
+#' - Bind `distribution` and `extinct` by rows
+#' - Map all necessary Darwin Core terms. 
+#' - For `occurrenceStatus` and `eventDate`
+#'  - Values are already mapped for taxa != extinct
+#'  - specify `occurrenceStatus` and `eventDate` for extinct species
+#' 3. Map invasion stage (part of the mapping of the description extension, paragraph xxx`)
+#' - Bind `invasion stage`, `extinct` and `ext.cas` by rows
+#' - invasion stage is already mapped for taxa != extinct ()
+#' - specify invasion stage for extinct and extinct/casual species. 
+
 #' This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
 
 #' Include this in the Rmd: ![_Schematic overview of the mapping process_](mapping_scheme_MAP.png)
-
-#' This translates into the following stepwise approach: 
-
-#' 1. Clean `raw_fr` and `raw_mrr` somehow, as we need clean date information in both the distribution and descritpion extension
-#' 2. Save two subsets of `raw_data` as a separate datasets:
-#' - `extinct` = all extinct species.
-#' - `ext.cas` = all extinct/casual species
-#' 3. Map the distribution extension (`distribution`, a copy of `raw_data`)
-#' - Add `occurrenceStatus` and `eventDate` to `distribution` for all occurrences **within** the specified time frame (`eventDate` = first - most recent observation).
-#' - Add `occurrenceStatus` and `eventDate` to `extinct` for all occurrences **after** the specified time frame (`eventDate` = most recent observation - now).
-#' - Merge `distribution` and `extinct`. 
-#' - Map the other Darwin Core terms
-#' 3. Map the description extension (`description`, a copy of `raw_data`)
-#' - Add `invasion stage` to `raw_data` for all occurrences **within** the specified time frame (`eventDate` = first - most recent observation)
-#' - Add `invasion stage` to `extinct` and `ext.cas` for all occurrences **after** the specified time frame (`eventDate` = most recent observation - now).
-#' - Merge `distribution`, `extinct` and`ext.cas`.
-#' - Map the other Darwin Core terms
-
-#' #### Clean date information
-
-#' Create `start_year` from `raw_fr` (first record):
-raw_data %<>% mutate(start_year = raw_fr)
-
-#' Clean values:
-raw_data %<>% mutate(start_year = 
-                           str_replace_all(start_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
-)
-
-#' Create `end_year` from `raw_mrr` (most recent record):
-raw_data %<>% mutate(end_year = raw_mrr)
-
-#' Clean values:
-raw_data %<>% mutate(end_year = 
-                           str_replace_all(end_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
-)
-
-#' If `end_year` is `Ann.` or `N` use current year:
-current_year = format(Sys.Date(), "%Y")
-raw_data %<>% mutate(end_year = recode(end_year,
-                                           "Ann." = current_year,
-                                           "N" = current_year)
-)
-
-#' Show reformatted values for both `raw_fr` and `raw_mrr`:
-raw_data %>%
-  select(raw_fr, start_year) %>%
-  rename(raw_year = raw_fr, formatted_year = start_year) %>%
-  union( # Union with raw_mrr. Will also remove duplicates
-    raw_data %>%
-      select(raw_mrr, end_year) %>%
-      rename(raw_year = raw_mrr, formatted_year = end_year)
-  ) %>%
-  filter(nchar(raw_year) != 4) %>% # Don't show raw values that were already YYYY
-  arrange(raw_year) %>%
-  kable()
-
-#'Check if any `start_year` fall after `end_year` (expected to be none):
-raw_data %>%
-  select(start_year, end_year) %>%
-  mutate(start_year = as.numeric(start_year)) %>%
-  mutate(end_year = as.numeric(end_year)) %>%
-  group_by(start_year, end_year) %>%
-  summarize(records = n()) %>%
-  filter(start_year > end_year) %>%
-  kable()
 
 #' #### Create `extinct` and `ext-cas`:
 extinct <- raw_data %>% filter(invasion_stage == "Ext.")
 ext.cas <- raw_data %>% filter(invasion_stage == "Ext./Cas.")
 
-#' ## Create distribution extension
-
-#' ### Pre-processing
-distribution <- raw_data
-
-#' ### Term mapping
-
-#' Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
-
-#' First, we add `occurrenceStatus` and `eventDate` to `distribution`
-
-#' #### distribution - occurrenceStatus
-
-#' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
-distribution %<>% mutate(occurrenceStatus = recode(presence,
-                                                   "S" = "present",
-                                                   "M" = "present",
-                                                   "?" = "presence uncertain",
-                                                   "NA" = "absent",
-                                                   .default = "",
-                                                   .missing = "absent"
-))
-
-
-#' Remove records with `absent`:
-distribution %<>% filter (!occurrenceStatus == "absent")
-
-#' Overview of `occurrenceStatus` for each location x presence combination
-distribution %>% select (location, presence, occurrenceStatus) %>%
-  group_by_all() %>%
-  summarize(records = n()) %>% 
-  kable()
-
-#' #### distribution - eventDate
-#' Combine `start_year` and `end_year` in an ranged `Date` (ISO 8601 format). If any those two dates is empty or the same, we use a single year, as a statement when it was seen once (either as a first record or a most recent record):
-distribution %<>% mutate(Date = 
-  case_when(
-    start_year == "" & end_year == "" ~ "",
-    start_year == ""                  ~ end_year,
-    end_year == ""                    ~ start_year,
-    start_year == end_year            ~ start_year,
-    TRUE                              ~ paste(start_year, end_year, sep = "/")
-  )
-)
 
 #' Populate `eventDate` only when `presence` = `S`.
 distribution %<>% mutate (eventDate = case_when(
