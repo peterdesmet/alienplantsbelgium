@@ -161,10 +161,17 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
 
 #' ## eventDate, occurrenceStatus and invasion stage
 #'
-#' Before we start mapping the distribution and description extensions, we first focus on the mapping of three specific terms: 
-#' - occurrenceStatus (distribution)
-#' - eventDate (distribution)
-#' - invasion stage (description, not a Darwin Core term)
+#' Before we start mapping the distribution and description extensions, we focus on three specific issues:
+#' - integrate regional versus national information
+#' - invasion stage (description extension)
+#' - clean date information
+
+#' Why do we provide this information here?
+#' 
+#' 1. Information on the occurrences is given for the **regions**, while date information is given for **Belgium** as a whole. Some transformations and clarifications are needed.
+#' 2. In some cases, the mapping of `eventDate`, `presence status` and `invasion stage` is linked (e.g. the `occurrenceStatus` of a species depends on its `invasion stage`. 
+#' 3. Resulting from 2., clean date information is needed for both the distribution and description extension. We do de cleaning step here.
+#' 
 #' 
 #' ### eventDate
 #' 
