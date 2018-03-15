@@ -258,7 +258,7 @@ raw_data %<>% rename ("location" = "key", "presence" = "value")
 raw_data %<>% filter (!presence == "NA")
 
 #' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
-raw_data %<>% mutate(occurrenceStatus = recode(presence,
+raw_data %<>% mutate(raw_occurrenceStatus = recode(presence,
                                                    "S" = "present",
                                                    "M" = "present",
                                                    "?" = "presence uncertain",
@@ -269,10 +269,10 @@ raw_data %<>% mutate(occurrenceStatus = recode(presence,
 
 
 #' Remove records with `absent`:
-raw_data %<>% filter (!occurrenceStatus == "absent")
+raw_data %<>% filter (!raw_occurrenceStatus == "absent")
 
-#' Overview of `occurrenceStatus` for each location x presence combination
-raw_data %>% select (location, presence, occurrenceStatus) %>%
+#' Overview of `raw_occurrenceStatus` for each location x presence combination
+raw_data %>% select (location, presence, raw_occurrenceStatus) %>%
   group_by_all() %>%
   summarize(records = n()) %>% 
   kable()
@@ -336,8 +336,8 @@ raw_data %<>% mutate(Date =
                            )
 )
 
-#' Populate `eventDate` only when `presence` = `S`.
-raw_data %<>% mutate (eventDate = case_when(
+#' Populate `raw_eventDate` only when `presence` = `S`.
+raw_data %<>% mutate (raw_eventDate = case_when(
   presence == "S" ~ Date,
   TRUE ~ ""))
 
@@ -351,7 +351,7 @@ raw_data %>%
   kable()
 
 #'  Clean and interpret these data:
-raw_data %<>% mutate(invasion_stage = recode(raw_d_n,
+raw_data %<>% mutate(raw_invasion_stage = recode(raw_d_n,
  "Ext.?" = "Ext.",
  "Cas.?" = "Cas.",
  "Nat.?" = "Nat.",
@@ -360,7 +360,7 @@ raw_data %<>% mutate(invasion_stage = recode(raw_d_n,
 #' We decided to use the unified framework for biological invasions of [Blackburn et al. 2011](http://doc.rero.ch/record/24725/files/bach_puf.pdf) for `invasion stage`.
 #' `casual`, `naturalized` and `invasive` are terms included in this framework. However, we decided to discard the terms `naturalized` and `invasive` listed in Blackburn et al. (see trias-project/alien-fishes-checklist#6 (comment)). 
 #' So, `naturalized` and `invasive` are replaced by `established`.
-raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
+raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
                                           "Cas." = "casual",
                                           "Inv." = "established",
                                           "Nat." = "established"))
@@ -372,7 +372,7 @@ raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
 #' - Extinct/casual: Some of these extinct taxa are no longer considered as naturalized but still occur as casuals; such taxa are indicated as “Ext./Cas.” (for instance _Tragopogon porrifolius_).
 #' 
 #' For these species, we include the invasion stage **within** the specified time frame (`eventDate` = first - most recent observation)...
-raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
+raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
    "Ext." = "established",            # `naturalized` is replaced by `established`
    "Ext./Cas." = "established"))      # `naturalized` is replaced by `established`
 
