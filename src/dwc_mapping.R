@@ -413,6 +413,10 @@ raw_data %>%
   filter(start_year > end_year) %>%
   kable()
 
+#' #### Create `extinct` and `ext-cas`:
+extinct <- raw_data %>% filter(invasion_stage == "Ext.")
+ext.cas <- raw_data %>% filter(invasion_stage == "Ext./Cas.")
+
 #' Combine `start_year` and `end_year` in an ranged `Date` (ISO 8601 format). If any those two dates is empty or the same, we use a single year, as a statement when it was seen once (either as a first record or a most recent record):
 distribution %<>% mutate(Date = 
   case_when(
