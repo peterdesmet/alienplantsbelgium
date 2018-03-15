@@ -302,26 +302,32 @@ raw_data %<>% filter (!presence == "NA")
 
 #' #### taxonID
 distribution %<>% mutate(taxonID = raw_taxonID)
+#' ### invasion stage
 
-#' #### locationID
-distribution %<>% mutate(locationID = case_when (
-  location == "Belgium" ~ "ISO_3166-2:BE",
-  location == "Flanders" ~ "ISO_3166-2:BE-VLG",
-  location == "Wallonia" ~ "ISO_3166-2:BE-WAL",
-  location == "Brussels" ~ "ISO_3166-2:BE-BRU"))
+#' The information for invasion stage is contained in `raw_d_n`:
+raw_data %>%
+  select(raw_d_n) %>%
+  group_by_all() %>%
+  summarize(records = n()) %>%
+  kable()
 
-#' #### locality
-distribution %<>% mutate(locality = case_when (
-  location == "Belgium" ~ "Belgium",
-  location == "Flanders" ~ "Flemish Region",
-  location == "Wallonia" ~ "Walloon Region",
-  location == "Brussels" ~ "Brussels-Capital Region"))
+#'  Clean and interpret these data:
+raw_data %<>% mutate(invasion_stage = recode(raw_d_n,
+ "Ext.?" = "Ext.",
+ "Cas.?" = "Cas.",
+ "Nat.?" = "Nat.",
+ .missing = ""))
 
-#' #### countryCode
-distribution %<>% mutate(countryCode = "BE")
+#' We decided to use the unified framework for biological invasions of [Blackburn et al. 2011](http://doc.rero.ch/record/24725/files/bach_puf.pdf) for `invasion stage`.
+#' `casual`, `naturalized` and `invasive` are terms included in this framework. However, we decided to discard the terms `naturalized` and `invasive` listed in Blackburn et al. (see trias-project/alien-fishes-checklist#6 (comment)). 
+#' So, `naturalized` and `invasive` are replaced by `established`.
+raw_data %<>% mutate(invasion_stage = recode(invasion_stage,
+                                          "Cas." = "casual",
+                                          "Inv." = "established",
+                                          "Nat." = "established"))
 
-#' #### lifeStage
-#' #### occurrenceStatus
+
+#' However, we need a more complex mapping for `Ext.` and `Ext./Cas.`:
 #' 
 #' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
 distribution %<>% mutate(occurrenceStatus = recode(presence,
@@ -332,10 +338,16 @@ distribution %<>% mutate(occurrenceStatus = recode(presence,
   .default = "",
   .missing = "absent"
 ))
+#' - Extinct: introduced taxa that once were naturalized (usually rather locally) but that have not been confirmed in recent times in their known localities. Only taxa that are certainly extinct are indicated as such.   
+#' - Extinct/casual: Some of these extinct taxa are no longer considered as naturalized but still occur as casuals; such taxa are indicated as “Ext./Cas.” (for instance _Tragopogon porrifolius_).
+#' 
+#' For these species, we include the invasion stage **within** the specified time frame (`eventDate` = first - most recent observation) and **after** the last observation (`eventDate` = most recent observation - now).
+#' For extinct species, We also need to indicate that this species is absent **after** its last observation. 
+#' Thus, for the mapping of the distribution and the description extenion, we need to combine the information from different fields in raw_data. 
+#' 
+#' This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
 
 
-#' Remove records with `absent`:
-distribution %<>% filter (!occurrenceStatus == "absent")
 
 #' Overview of `occurrenceStatus` for each location x presence combination
 distribution %>% select (location, presence, occurrenceStatus) %>%
