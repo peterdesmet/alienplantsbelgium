@@ -365,42 +365,37 @@ distribution %<>% mutate(occurrenceStatus = recode(presence,
 #' - Merge `distribution`, `extinct` and`ext.cas`.
 #' - Map the other Darwin Core terms
 
-#' #### threatStatus
-#' #### establishmentMeans
-distribution %<>% mutate (establishmentMeans = "introduced")
+#' #### Clean date information
 
-#' #### appendixCITES
-#' #### eventDate
-#' 
 #' Create `start_year` from `raw_fr` (first record):
-distribution %<>% mutate(start_year = raw_fr)
+raw_data %<>% mutate(start_year = raw_fr)
 
 #' Clean values:
-distribution %<>% mutate(start_year = 
-  str_replace_all(start_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
+raw_data %<>% mutate(start_year = 
+                           str_replace_all(start_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
 )
 
 #' Create `end_year` from `raw_mrr` (most recent record):
-distribution %<>% mutate(end_year = raw_mrr)
+raw_data %<>% mutate(end_year = raw_mrr)
 
 #' Clean values:
-distribution %<>% mutate(end_year = 
-  str_replace_all(end_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
+raw_data %<>% mutate(end_year = 
+                           str_replace_all(end_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
 )
 
 #' If `end_year` is `Ann.` or `N` use current year:
 current_year = format(Sys.Date(), "%Y")
-distribution %<>% mutate(end_year = recode(end_year,
-  "Ann." = current_year,
-  "N" = current_year)
+raw_data %<>% mutate(end_year = recode(end_year,
+                                           "Ann." = current_year,
+                                           "N" = current_year)
 )
 
 #' Show reformatted values for both `raw_fr` and `raw_mrr`:
-distribution %>%
+raw_data %>%
   select(raw_fr, start_year) %>%
   rename(raw_year = raw_fr, formatted_year = start_year) %>%
   union( # Union with raw_mrr. Will also remove duplicates
-    distribution %>%
+    raw_data %>%
       select(raw_mrr, end_year) %>%
       rename(raw_year = raw_mrr, formatted_year = end_year)
   ) %>%
@@ -409,7 +404,7 @@ distribution %>%
   kable()
 
 #'Check if any `start_year` fall after `end_year` (expected to be none):
-distribution %>%
+raw_data %>%
   select(start_year, end_year) %>%
   mutate(start_year = as.numeric(start_year)) %>%
   mutate(end_year = as.numeric(end_year)) %>%
