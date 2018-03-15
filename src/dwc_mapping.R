@@ -417,6 +417,40 @@ raw_data %>%
 extinct <- raw_data %>% filter(invasion_stage == "Ext.")
 ext.cas <- raw_data %>% filter(invasion_stage == "Ext./Cas.")
 
+#' ## Create distribution extension
+
+#' ### Pre-processing
+distribution <- raw_data
+
+#' ### Term mapping
+
+#' Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
+
+#' First, we add `occurrenceStatus` and `eventDate` to `distribution`
+
+#' #### distribution - occurrenceStatus
+
+#' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
+distribution %<>% mutate(occurrenceStatus = recode(presence,
+                                                   "S" = "present",
+                                                   "M" = "present",
+                                                   "?" = "presence uncertain",
+                                                   "NA" = "absent",
+                                                   .default = "",
+                                                   .missing = "absent"
+))
+
+
+#' Remove records with `absent`:
+distribution %<>% filter (!occurrenceStatus == "absent")
+
+#' Overview of `occurrenceStatus` for each location x presence combination
+distribution %>% select (location, presence, occurrenceStatus) %>%
+  group_by_all() %>%
+  summarize(records = n()) %>% 
+  kable()
+
+#' #### distribution - eventDate
 #' Combine `start_year` and `end_year` in an ranged `Date` (ISO 8601 format). If any those two dates is empty or the same, we use a single year, as a statement when it was seen once (either as a first record or a most recent record):
 distribution %<>% mutate(Date = 
   case_when(
@@ -433,7 +467,58 @@ distribution %<>% mutate (eventDate = case_when(
   presence == "S" ~ Date,
   TRUE ~ ""))
 
+#' Remove intermediary `Date`
+distribution %<>% select(-Date)
 
+#' Second, we add `occurrenceStatus` and `eventDate` to `extinct`
+
+#' Extinct taxa were naturalized (usually rather locally) but have not been confirmed after their most recent record in their known localities
+
+#' #### extinct - occurrenceStatus
+extinct %<>% mutate(occurrenceStatus = "absent")
+
+#' #### extinct - eventDate
+
+#' Inspect `end_year`:
+extinct %>% select(end_year) %>%
+  group_by_all() %>%
+  summarise(records = n()) %>%
+  kable()
+
+#' We assume these species from are absent from their observation up to now: 
+extinct %<>% mutate(eventDate = paste(end_year, current_year, sep ="/"))
+
+#' Bind `distribution` and `extinct`:
+distribution %<>% bind_rows(distribution, extinct)
+
+#' Now we map the other Darwin Core terms:
+
+#' #### taxonID
+distribution %<>% mutate(taxonID = raw_taxonID)
+
+#' #### locationID
+distribution %<>% mutate(locationID = case_when (
+  location == "Belgium" ~ "ISO_3166-2:BE",
+  location == "Flanders" ~ "ISO_3166-2:BE-VLG",
+  location == "Wallonia" ~ "ISO_3166-2:BE-WAL",
+  location == "Brussels" ~ "ISO_3166-2:BE-BRU"))
+
+#' #### locality
+distribution %<>% mutate(locality = case_when (
+  location == "Belgium" ~ "Belgium",
+  location == "Flanders" ~ "Flemish Region",
+  location == "Wallonia" ~ "Walloon Region",
+  location == "Brussels" ~ "Brussels-Capital Region"))
+
+#' #### countryCode
+distribution %<>% mutate(countryCode = "BE")
+
+#' #### lifeStage
+#' #### threatStatus
+#' #### establishmentMeans
+distribution %<>% mutate (establishmentMeans = "introduced")
+
+#' #### appendixCITES
 #' #### startDayOfYear
 #' #### endDayOfYear
 #' #### source
@@ -445,9 +530,11 @@ distribution %<>% mutate (eventDate = case_when(
 #' Remove the original columns:
 distribution %<>% select(
   -one_of(raw_colnames),
-  -location,-presence,
-  -start_year, -end_year, - Date
-)
+  -location,-presence, -invasion_stage,
+  -start_year, -end_year)
+
+#' Rearrange Darwin Core terms:
+distribution %<>% select(taxonID, locationID, locality, countryCode, establishmentMeans, occurrenceStatus, eventDate)
 
 #' Sort on `taxonID`:
 distribution %<>% arrange(taxonID)
