@@ -404,37 +404,34 @@ raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
 extinct <- raw_data %>% filter(raw_d_n == "Ext.")
 ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
 
+#' ## Create distribution extension
 
-#' Populate `eventDate` only when `presence` = `S`.
-distribution %<>% mutate (eventDate = case_when(
-  presence == "S" ~ Date,
-  TRUE ~ ""))
+#' ### Pre-processing
+distribution <- raw_data
 
-#' Remove intermediary `Date`
-distribution %<>% select(-Date)
-
-#' Second, we add `occurrenceStatus` and `eventDate` to `extinct`
-
-#' Extinct taxa were naturalized (usually rather locally) but have not been confirmed after their most recent record in their known localities
-
-#' #### extinct - occurrenceStatus
-extinct %<>% mutate(occurrenceStatus = "absent")
-
-#' #### extinct - eventDate
-
-#' Inspect `end_year`:
-extinct %>% select(end_year) %>%
-  group_by_all() %>%
-  summarise(records = n()) %>%
-  kable()
-
-#' We assume these species from are absent from their observation up to now: 
-extinct %<>% mutate(eventDate = paste(end_year, current_year, sep ="/"))
-
-#' Bind `distribution` and `extinct`:
+#' Bind `distribution` and `extinct` by rows:
 distribution %<>% bind_rows(distribution, extinct)
 
-#' Now we map the other Darwin Core terms:
+#' ### Term mapping
+
+#' Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
+extinct %<>% mutate(occurrenceStatus = "absent")
+
+#' #### occurrenceStatus and eventDate
+
+#' occurrenceStatus has already been mapped in `raw_occurrenceStatus` for all species **within** the range of the first and most recent record.
+#' Extinct species are absent **after** the most recent record (see also `eventDate` mapping):
+
+#' Species within the range of the first and most recent record.
+distribution %<>% mutate(occurrenceStatus = raw_occurrenceStatus)  
+distribution %<>% mutate(eventDate = raw_eventDate)
+
+#' All extinct species **after** the most recent record.
+extinct %<>% mutate(occurrenceStatus = "absent") #' for all extinct species **after** the most recent record.
+extinct %<>% mutate(eventDate = paste(end_year, current_year, sep = "/"))
+
+#' Bind `distribution` and `extinct` by rows:
+distribution %<>% bind_rows(distribution, extinct)
 
 #' #### taxonID
 distribution %<>% mutate(taxonID = raw_taxonID)
@@ -472,9 +469,9 @@ distribution %<>% mutate (establishmentMeans = "introduced")
 #' 
 #' Remove the original columns:
 distribution %<>% select(
-  -one_of(raw_colnames),
-  -location,-presence, -invasion_stage,
-  -start_year, -end_year)
+  -starts_with("raw_"),
+  -location,-presence,
+  -start_year, -end_year, -Date)
 
 #' Rearrange Darwin Core terms:
 distribution %<>% select(taxonID, locationID, locality, countryCode, establishmentMeans, occurrenceStatus, eventDate)
