@@ -783,21 +783,8 @@ raw_ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
 distribution <- raw_data
 ```
 
-Bind `distribution` and `extinct` by rows:
-
-
-```r
-distribution %<>% bind_rows(distribution, extinct)
-```
-
 ### Term mapping
 Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
-
-
-```r
-extinct %<>% mutate(occurrenceStatus = "absent")
-```
-
 #### occurrenceStatus and eventDate
 occurrenceStatus and eventDate have already been mapped in `raw_occurrenceStatus` for all species **within** the range of the first and most recent record.
 Extinct species are absent **after** the most recent record (see also `eventDate` mapping):
@@ -822,7 +809,7 @@ Bind `distribution` and `extinct` by rows:
 
 
 ```r
-distribution %<>% bind_rows(distribution, extinct)
+distribution %<>% bind_rows(extinct)
 ```
 
 #### taxonID
@@ -917,8 +904,8 @@ kable(head(distribution))
 |alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |introduced         |present          |          |
 |alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-BRU |Brussels-Capital Region |BE          |introduced         |present          |          |
 |alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE     |Belgium                 |BE          |introduced         |present          |1944/2017 |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-VLG |Flemish Region          |BE          |introduced         |present          |          |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |introduced         |present          |          |
+|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |ISO_3166-2:BE-VLG |Flemish Region          |BE          |introduced         |present          |          |
+|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |introduced         |present          |          |
 
 Save to CSV:
 
@@ -970,7 +957,7 @@ Bind invasion stage, extinct and ext.cas by rows:
 
 
 ```r
-invasion_stage %<>% bind_rows(invasion_stage, extinct, ext.cas)
+invasion_stage %<>% bind_rows(extinct, ext.cas)
 ```
 
 Create a `type` field to indicate the type of description:
@@ -1437,7 +1424,13 @@ pathway_desc %<>% filter(!is.na(description) & description != "")
 description_ext <- bind_rows(invasion_stage, native_range, pathway_desc)
 ```
 
-The description extension applies to records 
+The description extension is given on a national level. We filter out the Belgian records:
+
+
+```r
+description_ext %<>% filter(location == "Belgium")
+```
+
 ### Term mapping
 
 Map the source data to [Taxon Description](http://rs.gbif.org/extension/gbif/1.0/description.xml):
@@ -1485,8 +1478,8 @@ Remove the original columns:
 
 ```r
 description_ext %<>% select(
-  -one_of(raw_colnames)
-)
+  -starts_with("raw_"), -location, -presence, 
+  -start_year, -end_year, -Date)
 ```
 
 Move `taxonID` to the first position:
@@ -1512,18 +1505,18 @@ kable(head(description_ext, 10))
 
 
 
-|taxonID                                                     |location |presence |raw_occurrenceStatus |start_year |end_year |Date      |raw_eventDate |raw_invasion_stage |description               |type           |language |
-|:-----------------------------------------------------------|:--------|:--------|:--------------------|:----------|:--------|:---------|:-------------|:------------------|:-------------------------|:--------------|:--------|
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Flanders |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Wallonia |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Brussels |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Belgium  |S        |present              |1944       |2017     |1944/2017 |1944/2017     |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Flanders |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Wallonia |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Brussels |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Belgium  |S        |present              |1944       |2017     |1944/2017 |1944/2017     |casual             |casual                    |invasion stage |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Flanders |M        |present              |1944       |2017     |1944/2017 |              |casual             |temperate Asia (WGSRPD:3) |native range   |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Wallonia |M        |present              |1944       |2017     |1944/2017 |              |casual             |temperate Asia (WGSRPD:3) |native range   |en       |
+|taxonID                                                     |description                          |type           |language |
+|:-----------------------------------------------------------|:------------------------------------|:--------------|:--------|
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |casual                               |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |temperate Asia (WGSRPD:3)            |native range   |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |cbd_2014_pathway:escape_horticulture |pathway        |en       |
+|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |casual                               |invasion stage |en       |
+|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |temperate Asia (WGSRPD:3)            |native range   |en       |
+|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |cbd_2014_pathway:escape_horticulture |pathway        |en       |
+|alien-plants-belgium:taxon:004f8d63026942a6baf80b67b6d40b98 |casual                               |invasion stage |en       |
+|alien-plants-belgium:taxon:004f8d63026942a6baf80b67b6d40b98 |Northern America (WGSRPD:7)          |native range   |en       |
+|alien-plants-belgium:taxon:004f8d63026942a6baf80b67b6d40b98 |cbd_2014_pathway:escape_horticulture |pathway        |en       |
+|alien-plants-belgium:taxon:0057c474d19804c969845b5697f69148 |established                          |invasion stage |en       |
 
 Save to CSV:
 
@@ -1538,8 +1531,8 @@ write.csv(description_ext, file = dwc_description_file, na = "", row.names = FAL
 
 * Source file: 6816
 * Taxon core: 2522
-* Distribution extension: 27384
-* Description extension: 31573
+* Distribution extension: 6856
+* Description extension: 8974
 
 ### Taxon core
 

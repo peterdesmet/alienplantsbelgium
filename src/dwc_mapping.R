@@ -409,13 +409,9 @@ raw_ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
 #' ### Pre-processing
 distribution <- raw_data
 
-#' Bind `distribution` and `extinct` by rows:
-distribution %<>% bind_rows(distribution, extinct)
-
 #' ### Term mapping
 
 #' Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
-extinct %<>% mutate(occurrenceStatus = "absent")
 
 #' #### occurrenceStatus and eventDate
 
