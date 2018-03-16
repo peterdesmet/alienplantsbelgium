@@ -510,7 +510,7 @@ ext.cas <- raw_ext.cas
 ext.cas %<>% mutate(description = paste ("casual", "(", paste(end_year, current_year, sep = "/"), ")")) 
 
 #' Bind invasion stage, extinct and ext.cas by rows:
-invasion_stage %<>% bind_rows(invasion_stage, extinct, ext.cas)
+invasion_stage %<>% bind_rows(extinct, ext.cas)
 
 #' Create a `type` field to indicate the type of description:
 invasion_stage %<>% mutate(type = "invasion stage")
