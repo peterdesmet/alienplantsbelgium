@@ -491,12 +491,33 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 #' 
 #' #### Invasion stage
 #' 
-#' Create a new data frame:
+#' Information for invasion stage is already present in `raw_data` for all species within the range of the first and most recent record (`raw_invasion_stage`)
+invasion_stage <- raw_data
+
+#' Create `description` from `raw_invasion_stage`. For extinct species, we need to add date information to `invasion stage`, to specify that this applies to the invasion stage within the range of the first and most recent record. 
+invasion_stage %<>% mutate(description = case_when(
+  raw_d_n == "Ext." | raw_d_n == "Ext./Cas." ~ paste(raw_invasion_stage, "(", raw_eventDate, ")"),
+  TRUE ~ raw_invasion_stage))
+
+#' Map invasion stage information for all extinct and extinct/casual species after the most recent record. 
+#' For these invasion stages, we need to indicate that this applies to the period after the most recent record.
+extinct <- raw_extinct 
+extinct %<>% mutate(description = paste ("NA", "(", paste(end_year, current_year, sep = "/"), ")")) 
+
+#' Map invasion stage information for all extinct/casual species after the most recent record:
+ext.cas <- raw_ext.cas 
+ext.cas %<>% mutate(description = paste ("casual", "(", paste(end_year, current_year, sep = "/"), ")")) 
+
+#' Bind invasion stage, extinct and ext.cas by rows:
+invasion_stage %<>% bind_rows(invasion_stage, extinct, ext.cas)
+
+#' Create a `type` field to indicate the type of description:
+invasion_stage %<>% mutate(type = "invasion stage")
 
 #' #### Native range
 #' 
 #' `raw_origin` contains native range information (e.g. `E AS-Te NAM`). We'll separate, clean, map and combine these values.
-#' 
+#'
 #' Create new data frame:
 native_range <- raw_data
 
@@ -686,6 +707,8 @@ pathway_desc %<>% filter(!is.na(description) & description != "")
 
 #' #### Union origin, native range and pathway:
 description_ext <- bind_rows(invasion_stage, native_range, pathway_desc)
+
+#' The description extension applies to records 
 
 #' ### Term mapping
 #' 
