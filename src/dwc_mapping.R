@@ -709,7 +709,8 @@ pathway_desc %<>% filter(!is.na(description) & description != "")
 #' #### Union origin, native range and pathway:
 description_ext <- bind_rows(invasion_stage, native_range, pathway_desc)
 
-#' The description extension applies to records 
+#' The description extension is given on a national level. We filter out the Belgian records:
+description_ext %<>% filter(location == "Belgium")
 
 #' ### Term mapping
 #' 
@@ -740,8 +741,8 @@ description_ext %<>% mutate(language = "en")
 #' 
 #' Remove the original columns:
 description_ext %<>% select(
-  -one_of(raw_colnames)
-)
+  -starts_with("raw_"), -location, -presence, 
+  -start_year, -end_year, -Date)
 
 #' Move `taxonID` to the first position:
 description_ext %<>% select(taxonID, everything())
