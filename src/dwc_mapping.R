@@ -264,6 +264,7 @@ raw_data %<>% mutate(raw_occurrenceStatus = recode(presence,
    "?" = "presence uncertain",
    "NA" = "absent",
    .default = "",
+   .missing = "absent"
 ))
 
 
