@@ -432,7 +432,7 @@ extinct %<>% mutate(occurrenceStatus = "absent") #' for all extinct species **af
 extinct %<>% mutate(eventDate = paste(end_year, current_year, sep = "/"))
 
 #' Bind `distribution` and `extinct` by rows:
-distribution %<>% bind_rows(distribution, extinct)
+distribution %<>% bind_rows(extinct)
 
 #' #### taxonID
 distribution %<>% mutate(taxonID = raw_taxonID)
