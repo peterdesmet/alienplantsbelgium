@@ -2,7 +2,7 @@
 
 Peter Desmet, Quentin Groom, Lien Reyserhove
 
-2018-02-02
+2018-03-16
 
 This document describes how we map the checklist data to Darwin Core.
 
@@ -303,24 +303,32 @@ Save to CSV:
 write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
 ```
 
-## Create distribution extension
+## eventDate, occurrenceStatus and invasion stage
 
-### Pre-processing
+Before we start mapping the distribution and description extensions, we focus on three specific terms:
+1. occurrenceStatus (distribution extension)
+2. eventDate (distribution extension)
+3. invasion stage (description extension)
+Why do we provide this information here?
 
+1. Information on the occurrences is given for the **regions**, while date information is given for **Belgium** as a whole. Some transformations and clarifications are needed.
+2. Date information is needed for both the distribution and description extension (see 3). We do the cleaning and mapping here.
+3. In some cases, the mapping of `eventDate`, `presence status` and `invasion stage` is linked (e.g. the `occurrenceStatus` of a species depends on its `invasion stage`. 
 
-```r
-distribution <- raw_data
-```
+### occurrenceStatus
 
-The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium (Flanders, Wallonia and the Brussels-Capital Region).
-Both national and regional information is required in the checklist. In the `distribution.csv`, we first provide the information on a national level for pathway, status and dates; followed by specific information for the regions. 
-However, information regarding pathway, status, first and last recorded observation applies to the distribution in Belgium as a whole.
-It is impossible to extrapolate this information for the regions, unless the species is present in only one region.
-In this case, we can assume pathway, status and date relate to that region and so we can keep lines for Belgium and for the specific region populated for all DwC terms (see #45)
-When a species is present in more than one region, we decided to only provide occurrenceStatus for the regional information, and specify all other information regarding pathway and dates only for Belgium
+The checklist contains minimal presence information (`X`,`?` or `NA`) for the three regions in Belgium: Flanders, Wallonia and the Brussels-Capital Region, contained in `raw_presence_fl`, `raw_presence_wa` and `raw_presence_br` respectively.
+Information regarding the first/last recorded observation applies to the distribution in Belgium as a whole.
+Both national and regional information is required in the checklist. In the `distribution.csv`, we will first provide `occurrenceStatus` and `eventDate`` on a **national level**, followed by specific information for the **regions**. 
+
+For this, we use the following principles:
+
+1. When a species is present in _only one region_, we can assume `eventDate` relates to that specific region. In this case, we can keep lines for Belgium and for the specific region populated with these variables (see #45).
+2. When a species is present in _more than one_ region, it is impossible to extrapolate the date information for the regions. In this case, we decided to provide `occurrenceStatus` for the regional information, and specify dates only for Belgium.  
 Thus, we need to specify when a species is present in only one of the regions.
+
 We generate 4 new columns: `Flanders`, `Brussels`,`Wallonia` and `Belgium`. 
-The content of these columns refers to the specific occurrence of a species on a regional or national level.
+The content of these columns refers to the specific presence status of a species on a regional or national level.
 `S` if present in a single region or in Belgium, `?` if presence uncertain, `NA` if absent and `M` if present in multiple regions.
 This should look like this:
 
@@ -368,11 +376,11 @@ kable(matrix(
 |X               |NA              |?               |S        |NA       |?        |S       |
 |X               |X               |?               |M        |M        |?        |S       |
 
-We translate this to the distribution extension:
+We translate this to the mapping:
 
 
 ```r
-distribution %<>% 
+raw_data %<>% 
   mutate(Flanders = case_when(
     raw_presence_fl == "X" & (is.na(raw_presence_br) | raw_presence_br == "?") & (is.na(raw_presence_wa) | raw_presence_wa == "?") ~ "S",
     raw_presence_fl == "?" ~ "?",
@@ -394,18 +402,11 @@ distribution %<>%
   ))
 ```
 
-Remove species for which we lack presence information (i.e. `Belgium` = `NA``)
-
-
-```r
-distribution %<>% filter (!is.na(Belgium))
-```
-
 Summary of the previous action:
 
 
 ```r
-distribution %>% select (raw_presence_fl, raw_presence_br, raw_presence_wa, Flanders, Wallonia, Brussels, Belgium) %>%
+raw_data %>% select (raw_presence_fl, raw_presence_br, raw_presence_wa, Flanders, Wallonia, Brussels, Belgium) %>%
   group_by_all() %>%
   summarize(records = n()) %>%
   arrange(Flanders, Wallonia, Brussels) %>%
@@ -423,17 +424,18 @@ distribution %>% select (raw_presence_fl, raw_presence_br, raw_presence_wa, Flan
 |X               |NA              |X               |M        |M        |NA       |S       |     627|
 |X               |X               |NA              |M        |NA       |M        |S       |      72|
 |NA              |X               |X               |NA       |M        |M        |S       |      24|
+|NA              |NA              |NA              |NA       |NA       |NA       |NA      |       2|
 |NA              |X               |NA              |NA       |NA       |S        |S       |      36|
 |NA              |NA              |X               |NA       |S        |NA       |S       |     461|
 |X               |?               |?               |S        |?        |?        |S       |       3|
 |X               |NA              |?               |S        |?        |NA       |S       |       1|
 |X               |NA              |NA              |S        |NA       |NA       |S       |     773|
 
-From wide to long table (i.e. create a `key` and `value` column)
+One line should represent the presence information of a species in one region or Belgium. We need to transform `raw_data` from a wide to a long table (i.e. create a `key` and `value` column)
 
 
 ```r
-distribution %<>% gather(
+raw_data %<>% gather(
   key, value,
   Flanders, Wallonia, Brussels, Belgium,
   convert = FALSE
@@ -444,62 +446,27 @@ Rename `key` and `value`
 
 
 ```r
-distribution %<>% rename ("location" = "key", "presence" = "value")
+raw_data %<>% rename ("location" = "key", "presence" = "value")
 ```
 
-### Term mapping
-
-Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
-#### taxonID
+Remove species for which we lack presence information (i.e. `presence` = `NA``)
 
 
 ```r
-distribution %<>% mutate(taxonID = raw_taxonID)
+raw_data %<>% filter (!presence == "NA")
 ```
-
-#### locationID
-
-
-```r
-distribution %<>% mutate(locationID = case_when (
-  location == "Belgium" ~ "ISO_3166-2:BE",
-  location == "Flanders" ~ "ISO_3166-2:BE-VLG",
-  location == "Wallonia" ~ "ISO_3166-2:BE-WAL",
-  location == "Brussels" ~ "ISO_3166-2:BE-BRU"))
-```
-
-#### locality
-
-
-```r
-distribution %<>% mutate(locality = case_when (
-  location == "Belgium" ~ "Belgium",
-  location == "Flanders" ~ "Flemish Region",
-  location == "Wallonia" ~ "Walloon Region",
-  location == "Brussels" ~ "Brussels-Capital Region"))
-```
-
-#### countryCode
-
-
-```r
-distribution %<>% mutate(countryCode = "BE")
-```
-
-#### lifeStage
-#### occurrenceStatus
 
 Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
 
 
 ```r
-distribution %<>% mutate(occurrenceStatus = recode(presence,
-  "S" = "present",
-  "M" = "present",
-  "?" = "presence uncertain",
-  "NA" = "absent",
-  .default = "",
-  .missing = "absent"
+raw_data %<>% mutate(raw_occurrenceStatus = recode(presence,
+   "S" = "present",
+   "M" = "present",
+   "?" = "presence uncertain",
+   "NA" = "absent",
+   .default = "",
+   .missing = "absent"
 ))
 ```
 
@@ -507,14 +474,14 @@ Remove records with `absent`:
 
 
 ```r
-distribution %<>% filter (!occurrenceStatus == "absent")
+raw_data %<>% filter (!raw_occurrenceStatus == "absent")
 ```
 
-Overview of `occurrenceStatus` for each location x presence combination
+Overview of `raw_occurrenceStatus` for each location x presence combination
 
 
 ```r
-distribution %>% select (location, presence, occurrenceStatus) %>%
+raw_data %>% select (location, presence, raw_occurrenceStatus) %>%
   group_by_all() %>%
   summarize(records = n()) %>% 
   kable()
@@ -522,44 +489,34 @@ distribution %>% select (location, presence, occurrenceStatus) %>%
 
 
 
-|location |presence |occurrenceStatus   | records|
-|:--------|:--------|:------------------|-------:|
-|Belgium  |?        |presence uncertain |      21|
-|Belgium  |S        |present            |    2499|
-|Brussels |?        |presence uncertain |      29|
-|Brussels |M        |present            |     592|
-|Brussels |S        |present            |      37|
-|Flanders |?        |presence uncertain |      22|
-|Flanders |M        |present            |    1200|
-|Flanders |S        |present            |     777|
-|Wallonia |?        |presence uncertain |      26|
-|Wallonia |M        |present            |    1152|
-|Wallonia |S        |present            |     461|
+|location |presence |raw_occurrenceStatus | records|
+|:--------|:--------|:--------------------|-------:|
+|Belgium  |?        |presence uncertain   |      21|
+|Belgium  |S        |present              |    2499|
+|Brussels |?        |presence uncertain   |      29|
+|Brussels |M        |present              |     592|
+|Brussels |S        |present              |      37|
+|Flanders |?        |presence uncertain   |      22|
+|Flanders |M        |present              |    1200|
+|Flanders |S        |present              |     777|
+|Wallonia |?        |presence uncertain   |      26|
+|Wallonia |M        |present              |    1152|
+|Wallonia |S        |present              |     461|
 
-#### threatStatus
-#### establishmentMeans
-
-
-```r
-distribution %<>% mutate (establishmentMeans = "introduced")
-```
-
-#### appendixCITES
 #### eventDate
-
 Create `start_year` from `raw_fr` (first record):
 
 
 ```r
-distribution %<>% mutate(start_year = raw_fr)
+raw_data %<>% mutate(start_year = raw_fr)
 ```
 
 Clean values:
 
 
 ```r
-distribution %<>% mutate(start_year = 
-  str_replace_all(start_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
+raw_data %<>% mutate(start_year = 
+                       str_replace_all(start_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
 )
 ```
 
@@ -567,15 +524,15 @@ Create `end_year` from `raw_mrr` (most recent record):
 
 
 ```r
-distribution %<>% mutate(end_year = raw_mrr)
+raw_data %<>% mutate(end_year = raw_mrr)
 ```
 
 Clean values:
 
 
 ```r
-distribution %<>% mutate(end_year = 
-  str_replace_all(end_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
+raw_data %<>% mutate(end_year = 
+                       str_replace_all(end_year, "(\\?|ca. |<|>)", "") # Strip ?, ca., < and >
 )
 ```
 
@@ -584,9 +541,9 @@ If `end_year` is `Ann.` or `N` use current year:
 
 ```r
 current_year = format(Sys.Date(), "%Y")
-distribution %<>% mutate(end_year = recode(end_year,
-  "Ann." = current_year,
-  "N" = current_year)
+raw_data %<>% mutate(end_year = recode(end_year,
+                                       "Ann." = current_year,
+                                       "N" = current_year)
 )
 ```
 
@@ -594,11 +551,11 @@ Show reformatted values for both `raw_fr` and `raw_mrr`:
 
 
 ```r
-distribution %>%
+raw_data %>%
   select(raw_fr, start_year) %>%
   rename(raw_year = raw_fr, formatted_year = start_year) %>%
   union( # Union with raw_mrr. Will also remove duplicates
-    distribution %>%
+    raw_data %>%
       select(raw_mrr, end_year) %>%
       rename(raw_year = raw_mrr, formatted_year = end_year)
   ) %>%
@@ -690,7 +647,7 @@ Check if any `start_year` fall after `end_year` (expected to be none):
 
 
 ```r
-distribution %>%
+raw_data %>%
   select(start_year, end_year) %>%
   mutate(start_year = as.numeric(start_year)) %>%
   mutate(end_year = as.numeric(end_year)) %>%
@@ -709,26 +666,211 @@ Combine `start_year` and `end_year` in an ranged `Date` (ISO 8601 format). If an
 
 
 ```r
-distribution %<>% mutate(Date = 
-  case_when(
-    start_year == "" & end_year == "" ~ "",
-    start_year == ""                  ~ end_year,
-    end_year == ""                    ~ start_year,
-    start_year == end_year            ~ start_year,
-    TRUE                              ~ paste(start_year, end_year, sep = "/")
-  )
+raw_data %<>% mutate(Date = 
+                           case_when(
+                             start_year == "" & end_year == "" ~ "",
+                             start_year == ""                  ~ end_year,
+                             end_year == ""                    ~ start_year,
+                             start_year == end_year            ~ start_year,
+                             TRUE                              ~ paste(start_year, end_year, sep = "/")
+                           )
 )
 ```
 
-Populate `eventDate` only when `presence` = `S`.
+Populate `raw_eventDate` only when `presence` = `S`.
 
 
 ```r
-distribution %<>% mutate (eventDate = case_when(
+raw_data %<>% mutate (raw_eventDate = case_when(
   presence == "S" ~ Date,
   TRUE ~ ""))
 ```
 
+### invasion stage
+The information for invasion stage is contained in `raw_d_n`:
+
+
+```r
+raw_data %>%
+  select(raw_d_n) %>%
+  group_by_all() %>%
+  summarize(records = n()) %>%
+  kable()
+```
+
+
+
+|raw_d_n   | records|
+|:---------|-------:|
+|Cas.      |    4618|
+|Cas.?     |     142|
+|Ext.      |      40|
+|Ext./Cas. |      13|
+|Ext.?     |      10|
+|Inv.      |     230|
+|Nat.      |    1475|
+|Nat.?     |     288|
+
+ Clean and interpret these data:
+
+
+```r
+raw_data %<>% mutate(raw_invasion_stage = recode(raw_d_n,
+ "Ext.?" = "Ext.",
+ "Cas.?" = "Cas.",
+ "Nat.?" = "Nat.",
+ .missing = ""))
+```
+
+We decided to use the unified framework for biological invasions of [Blackburn et al. 2011](http://doc.rero.ch/record/24725/files/bach_puf.pdf) for `invasion stage`.
+`casual`, `naturalized` and `invasive` are terms included in this framework. However, we decided to discard the terms `naturalized` and `invasive` listed in Blackburn et al. (see trias-project/alien-fishes-checklist#6 (comment)). 
+So, `naturalized` and `invasive` are replaced by `established`.
+
+
+```r
+raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
+                                          "Cas." = "casual",
+                                          "Inv." = "established",
+                                          "Nat." = "established"))
+```
+
+However, we need a more complex mapping for `Ext.` and `Ext./Cas.`:
+
+- Extinct: introduced taxa that once were naturalized (usually rather locally) but that have not been confirmed in recent times in their known localities. Only taxa that are certainly extinct are indicated as such.   
+- Extinct/casual: Some of these extinct taxa are no longer considered as naturalized but still occur as casuals; such taxa are indicated as ‚ÄúExt./Cas.‚Äù (for instance _Tragopogon porrifolius_).
+
+For these species, we include the invasion stage **within** the specified time frame (`eventDate` = first - most recent observation)...
+
+
+```r
+raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
+   "Ext." = "established",            # `naturalized` is replaced by `established`
+   "Ext./Cas." = "established"))      # `naturalized` is replaced by `established`
+```
+
+...and **after** the last observation (`eventDate` = most recent observation - current date).
+For extinct species, we also need to specify that a species is absent **after** the last observation. 
+Thus, for some taxa, we need to add some **extra lines** with information on `invasion stage`, `eventDate` (most recent observation - current date) and `occurrenceStatus`.
+For this, we use a stepwise approach:
+1. Save two subsets of `raw_data` as a separate datasets:
+- `raw_extinct` = extinct species exclusively.
+- `raw_ext.cas` = extinct/casual species exclusively
+2. Distribution extension (`distribution`, a copy of `raw_data`)
+- `occurrenceStatus` and `eventDate` are already mapped for all species **within** the range of the first and most recent record) (`raw_occurrenceStatus` and `raw_eventDate`).  
+- Add `occurrenceStatus` and `eventDate` to `extinct` (copy of `raw_extinct) (for all extinct species **after** the most recent record)
+- Bind `distribution` and `extinct` by rows.
+- Map the other Darwin Core terms.
+3. Map invasion stage (part of the description extension, paragraph xxx`)
+- invasion stage is already mapped for all species **within** the range of the first and most recent record) (`raw_invasion_stage`)
+- Add invasion stage to `extinct` and `ext.cas`. 
+- Bind `invasion stage`, `extinct`, and `ext.cas` (copy of `raw_ext.cas`)
+- Map pathway of introduction and native range, create description extension.
+This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
+Include this in the Rmd: ![_Schematic overview of the mapping process_](mapping_scheme_MAP.png)
+#### Create `extinct` and `ext-cas`:
+
+
+```r
+raw_extinct <- raw_data %>% filter(raw_d_n == "Ext.")
+raw_ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
+```
+
+## Create distribution extension
+### Pre-processing
+
+
+```r
+distribution <- raw_data
+```
+
+Bind `distribution` and `extinct` by rows:
+
+
+```r
+distribution %<>% bind_rows(distribution, extinct)
+```
+
+### Term mapping
+Map the source data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml):
+
+
+```r
+extinct %<>% mutate(occurrenceStatus = "absent")
+```
+
+#### occurrenceStatus and eventDate
+occurrenceStatus and eventDate have already been mapped in `raw_occurrenceStatus` for all species **within** the range of the first and most recent record.
+Extinct species are absent **after** the most recent record (see also `eventDate` mapping):
+Species within the range of the first and most recent record.
+
+
+```r
+distribution %<>% mutate(occurrenceStatus = raw_occurrenceStatus)  
+distribution %<>% mutate(eventDate = raw_eventDate)
+```
+
+All extinct species **after** the most recent record.
+
+
+```r
+extinct <- raw_extinct
+extinct %<>% mutate(occurrenceStatus = "absent") #' for all extinct species **after** the most recent record.
+extinct %<>% mutate(eventDate = paste(end_year, current_year, sep = "/"))
+```
+
+Bind `distribution` and `extinct` by rows:
+
+
+```r
+distribution %<>% bind_rows(distribution, extinct)
+```
+
+#### taxonID
+
+
+```r
+distribution %<>% mutate(taxonID = raw_taxonID)
+```
+
+#### locationID
+
+
+```r
+distribution %<>% mutate(locationID = case_when (
+  location == "Belgium" ~ "ISO_3166-2:BE",
+  location == "Flanders" ~ "ISO_3166-2:BE-VLG",
+  location == "Wallonia" ~ "ISO_3166-2:BE-WAL",
+  location == "Brussels" ~ "ISO_3166-2:BE-BRU"))
+```
+
+#### locality
+
+
+```r
+distribution %<>% mutate(locality = case_when (
+  location == "Belgium" ~ "Belgium",
+  location == "Flanders" ~ "Flemish Region",
+  location == "Wallonia" ~ "Walloon Region",
+  location == "Brussels" ~ "Brussels-Capital Region"))
+```
+
+#### countryCode
+
+
+```r
+distribution %<>% mutate(countryCode = "BE")
+```
+
+#### lifeStage
+#### threatStatus
+#### establishmentMeans
+
+
+```r
+distribution %<>% mutate (establishmentMeans = "introduced")
+```
+
+#### appendixCITES
 #### startDayOfYear
 #### endDayOfYear
 #### source
@@ -741,10 +883,16 @@ Remove the original columns:
 
 ```r
 distribution %<>% select(
-  -one_of(raw_colnames),
+  -starts_with("raw_"),
   -location,-presence,
-  -start_year, -end_year, - Date
-)
+  -start_year, -end_year, -Date)
+```
+
+Rearrange Darwin Core terms:
+
+
+```r
+distribution %<>% select(taxonID, locationID, locality, countryCode, establishmentMeans, occurrenceStatus, eventDate)
 ```
 
 Sort on `taxonID`:
@@ -763,14 +911,14 @@ kable(head(distribution))
 
 
 
-|taxonID                                                     |locationID        |locality                |countryCode |occurrenceStatus |establishmentMeans |eventDate |
-|:-----------------------------------------------------------|:-----------------|:-----------------------|:-----------|:----------------|:------------------|:---------|
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-VLG |Flemish Region          |BE          |present          |introduced         |          |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |present          |introduced         |          |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-BRU |Brussels-Capital Region |BE          |present          |introduced         |          |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE     |Belgium                 |BE          |present          |introduced         |1944/2017 |
-|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |ISO_3166-2:BE-VLG |Flemish Region          |BE          |present          |introduced         |          |
-|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |present          |introduced         |          |
+|taxonID                                                     |locationID        |locality                |countryCode |establishmentMeans |occurrenceStatus |eventDate |
+|:-----------------------------------------------------------|:-----------------|:-----------------------|:-----------|:------------------|:----------------|:---------|
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-VLG |Flemish Region          |BE          |introduced         |present          |          |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |introduced         |present          |          |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-BRU |Brussels-Capital Region |BE          |introduced         |present          |          |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE     |Belgium                 |BE          |introduced         |present          |1944/2017 |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-VLG |Flemish Region          |BE          |introduced         |present          |          |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |ISO_3166-2:BE-WAL |Walloon Region          |BE          |introduced         |present          |          |
 
 Save to CSV:
 
@@ -781,110 +929,56 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 
 ## Create description extension
 
-In the description extension we want to include **origin** (`raw_d_n`), **native range** (`raw_origin`) and **pathway** (`raw_v_i``) information. We'll create a separate data frame for all and then combine these with union.
+In the description extension we want to include **invasion stage** (`raw_d_n`), **native range** (`raw_origin`) and **pathway** (`raw_v_i``) information. We'll create a separate data frame for all and then combine these with union.
 
-### Pre-processing
+#### Invasion stage
 
-#### Origin
-
-`origin` describes if a species is native in a distribution or not. Since Darwin Core has no `origin` field yet as suggested in [ias-dwc-proposal](https://github.com/qgroom/ias-dwc-proposal/blob/master/proposal.md#origin-new-term), we'll add this information in the description extension.
-
-Create new data frame:
+Information for invasion stage is already present in `raw_data` for all species within the range of the first and most recent record (`raw_invasion_stage`)
 
 
 ```r
-origin <- raw_data
+invasion_stage <- raw_data
 ```
 
-Create `description` from `raw_d_n`:
+Create `description` from `raw_invasion_stage`. For extinct species, we need to add date information to `invasion stage`, to specify that this applies to the invasion stage within the range of the first and most recent record. 
 
 
 ```r
-origin %<>% mutate(description = raw_d_n)
+invasion_stage %<>% mutate(description = case_when(
+  raw_d_n == "Ext." | raw_d_n == "Ext./Cas." ~ paste(raw_invasion_stage, "(", raw_eventDate, ")"),
+  TRUE ~ raw_invasion_stage))
+```
+
+Map invasion stage information for all extinct and extinct/casual species after the most recent record. 
+For these invasion stages, we need to indicate that this applies to the period after the most recent record.
+
+
+```r
+extinct <- raw_extinct 
+extinct %<>% mutate(description = paste ("NA", "(", paste(end_year, current_year, sep = "/"), ")")) 
+```
+
+Map invasion stage information for all extinct/casual species after the most recent record:
+
+
+```r
+ext.cas <- raw_ext.cas 
+ext.cas %<>% mutate(description = paste ("casual", "(", paste(end_year, current_year, sep = "/"), ")")) 
+```
+
+Bind invasion stage, extinct and ext.cas by rows:
+
+
+```r
+invasion_stage %<>% bind_rows(invasion_stage, extinct, ext.cas)
 ```
 
 Create a `type` field to indicate the type of description:
 
 
 ```r
-origin %<>% mutate(type = "origin")
+invasion_stage %<>% mutate(type = "invasion stage")
 ```
-
-Clean values:
-
-
-```r
-origin %<>% mutate(description = 
-  str_replace_all(description, "\\?", ""), # Strip ?
-  description = str_trim(description) # Clean whitespace
-)
-```
-
-Map values using [this vocabulary](https://github.com/qgroom/ias-dwc-proposal/blob/master/vocabulary/origin.tsv):
-
-
-```r
-origin %<>% mutate(description = recode(description,
-  "Cas." = "vagrant",
-  "Nat." = "introduced",
-  "Ext." = "",
-  "Inv." = "",
-  "Ext./Cas." = "",
-  .default = "",
-  .missing = ""
-))
-```
-
-Show mapped values:
-
-
-```r
-origin %>%
-  select(raw_d_n, description) %>%
-  group_by(raw_d_n, description) %>%
-  summarize(records = n()) %>%
-  arrange(raw_d_n) %>%
-  kable()
-```
-
-
-
-|raw_d_n   |description | records|
-|:---------|:-----------|-------:|
-|Cas.      |vagrant     |    1825|
-|Cas.?     |vagrant     |      50|
-|Ext.      |            |      15|
-|Ext./Cas. |            |       4|
-|Ext.?     |            |       4|
-|Inv.      |            |      64|
-|Nat.      |introduced  |     460|
-|Nat.?     |introduced  |      99|
-|NA        |            |       1|
-
-Keep only non-empty descriptions:
-
-
-```r
-origin %<>% filter(!is.na(description) & description != "")
-```
-
-Preview data:
-
-
-```r
-kable(head(origin))
-```
-
-
-
-| raw_id|raw_taxon                                                  |raw_hybrid_formula |raw_synonym |raw_family    |raw_m_i |raw_fr |raw_mrr |raw_origin |raw_presence_fl |raw_presence_br |raw_presence_wa |raw_d_n |raw_v_i     |raw_taxonrank |raw_scientificnameid                             |raw_taxonID                                                 |description |type   |
-|------:|:----------------------------------------------------------|:------------------|:-----------|:-------------|:-------|:------|:-------|:----------|:---------------|:---------------|:---------------|:-------|:-----------|:-------------|:------------------------------------------------|:-----------------------------------------------------------|:-----------|:------|
-|      1|Acanthus mollis L.                                         |NA                 |NA          |Acanthaceae   |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.       |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1  |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |vagrant     |origin |
-|      2|Acanthus spinosus L.                                       |NA                 |NA          |Acanthaceae   |D       |2016   |2017    |E AF AS-Te |X               |NA              |NA              |Cas.    |Hort.       |species       |http://ipni.org/urn:lsid:ipni.org:names:44920-1  |alien-plants-belgium:taxon:a65145fd1f24f081a1931f9874af48d9 |vagrant     |origin |
-|      3|Acorus calamus L.                                          |NA                 |NA          |Acoraceae     |D       |1680   |N       |AS-Te      |X               |X               |X               |Nat.    |Hort.       |species       |http://ipni.org/urn:lsid:ipni.org:names:84009-1  |alien-plants-belgium:taxon:574eaf931730ba162e0226a425247660 |introduced  |origin |
-|      4|Actinidia deliciosa (Chevalier) C.S. Liang & A.R. Ferguson |NA                 |NA          |Actinidiaceae |D       |2000   |Ann.    |AS-Te      |X               |NA              |X               |Cas.    |Food refuse |species       |http://ipni.org/urn:lsid:ipni.org:names:913605-1 |alien-plants-belgium:taxon:5c33253debbe5777c0499b5c4d76b6e4 |vagrant     |origin |
-|      5|Sambucus canadensis L.                                     |NA                 |NA          |Adoxaceae     |D       |1972   |2017    |NAM        |X               |NA              |NA              |Cas.    |Hort.       |species       |http://ipni.org/urn:lsid:ipni.org:names:321978-2 |alien-plants-belgium:taxon:03206f4a769c6649658ab96839e8a016 |vagrant     |origin |
-|      6|Viburnum davidii Franch.                                   |NA                 |NA          |Adoxaceae     |D       |2014   |2015    |AS-Te      |X               |NA              |NA              |Cas.    |Hort.       |species       |http://ipni.org/urn:lsid:ipni.org:names:149642-1 |alien-plants-belgium:taxon:12212e50c4f6c9b79616e9d7f95a1cfb |vagrant     |origin |
 
 #### Native range
 
@@ -988,19 +1082,19 @@ native_range %>%
 
 |value |mapped_value                | records|
 |:-----|:---------------------------|-------:|
-|      |                            |       1|
-|AF    |Africa (WGSRPD:2)           |     641|
-|AM    |pan-American                |      94|
-|AS    |Asia                        |      71|
-|AS-Te |temperate Asia (WGSRPD:3)   |    1057|
-|AS-Tr |tropical Asia (WGSRPD:4)    |      12|
-|AUS   |Australasia (WGSRPD:5)      |     117|
-|Cult. |cultivated origin           |      93|
-|E     |Europe (WGSRPD:1)           |    1124|
-|Hybr. |hybrid origin               |      69|
-|NAM   |Northern America (WGSRPD:7) |     366|
-|SAM   |Southern America (WGSRPD:8) |     158|
-|Trop. |Pantropical                 |      37|
+|      |                            |       2|
+|AF    |Africa (WGSRPD:2)           |    1750|
+|AM    |pan-American                |     250|
+|AS    |Asia                        |     195|
+|AS-Te |temperate Asia (WGSRPD:3)   |    2980|
+|AS-Tr |tropical Asia (WGSRPD:4)    |      28|
+|AUS   |Australasia (WGSRPD:5)      |     255|
+|Cult. |cultivated origin           |     242|
+|E     |Europe (WGSRPD:1)           |    3208|
+|Hybr. |hybrid origin               |     183|
+|NAM   |Northern America (WGSRPD:7) |     993|
+|SAM   |Southern America (WGSRPD:8) |     413|
+|Trop. |Pantropical                 |      90|
 
 Drop `key` and `value` column and rename `mapped value`:
 
@@ -1033,14 +1127,14 @@ kable(head(native_range))
 
 
 
-| raw_id|raw_taxon            |raw_hybrid_formula |raw_synonym |raw_family  |raw_m_i |raw_fr |raw_mrr |raw_origin |raw_presence_fl |raw_presence_br |raw_presence_wa |raw_d_n |raw_v_i |raw_taxonrank |raw_scientificnameid                            |raw_taxonID                                                 |description               |type         |
-|------:|:--------------------|:------------------|:-----------|:-----------|:-------|:------|:-------|:----------|:---------------|:---------------|:---------------|:-------|:-------|:-------------|:-----------------------------------------------|:-----------------------------------------------------------|:-------------------------|:------------|
-|      1|Acanthus mollis L.   |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Europe (WGSRPD:1)         |native range |
-|      1|Acanthus mollis L.   |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Africa (WGSRPD:2)         |native range |
-|      2|Acanthus spinosus L. |NA                 |NA          |Acanthaceae |D       |2016   |2017    |E AF AS-Te |X               |NA              |NA              |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44920-1 |alien-plants-belgium:taxon:a65145fd1f24f081a1931f9874af48d9 |Europe (WGSRPD:1)         |native range |
-|      2|Acanthus spinosus L. |NA                 |NA          |Acanthaceae |D       |2016   |2017    |E AF AS-Te |X               |NA              |NA              |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44920-1 |alien-plants-belgium:taxon:a65145fd1f24f081a1931f9874af48d9 |Africa (WGSRPD:2)         |native range |
-|      2|Acanthus spinosus L. |NA                 |NA          |Acanthaceae |D       |2016   |2017    |E AF AS-Te |X               |NA              |NA              |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44920-1 |alien-plants-belgium:taxon:a65145fd1f24f081a1931f9874af48d9 |temperate Asia (WGSRPD:3) |native range |
-|      3|Acorus calamus L.    |NA                 |NA          |Acoraceae   |D       |1680   |N       |AS-Te      |X               |X               |X               |Nat.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:84009-1 |alien-plants-belgium:taxon:574eaf931730ba162e0226a425247660 |temperate Asia (WGSRPD:3) |native range |
+| raw_id|raw_taxon          |raw_hybrid_formula |raw_synonym |raw_family  |raw_m_i |raw_fr |raw_mrr |raw_origin |raw_presence_fl |raw_presence_br |raw_presence_wa |raw_d_n |raw_v_i |raw_taxonrank |raw_scientificnameid                            |raw_taxonID                                                 |location |presence |raw_occurrenceStatus |start_year |end_year |Date      |raw_eventDate |raw_invasion_stage |description       |type         |
+|------:|:------------------|:------------------|:-----------|:-----------|:-------|:------|:-------|:----------|:---------------|:---------------|:---------------|:-------|:-------|:-------------|:-----------------------------------------------|:-----------------------------------------------------------|:--------|:--------|:--------------------|:----------|:--------|:---------|:-------------|:------------------|:-----------------|:------------|
+|      1|Acanthus mollis L. |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Flanders |M        |present              |1998       |2016     |1998/2016 |              |casual             |Europe (WGSRPD:1) |native range |
+|      1|Acanthus mollis L. |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Wallonia |M        |present              |1998       |2016     |1998/2016 |              |casual             |Europe (WGSRPD:1) |native range |
+|      1|Acanthus mollis L. |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Belgium  |S        |present              |1998       |2016     |1998/2016 |1998/2016     |casual             |Europe (WGSRPD:1) |native range |
+|      1|Acanthus mollis L. |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Flanders |M        |present              |1998       |2016     |1998/2016 |              |casual             |Africa (WGSRPD:2) |native range |
+|      1|Acanthus mollis L. |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Wallonia |M        |present              |1998       |2016     |1998/2016 |              |casual             |Africa (WGSRPD:2) |native range |
+|      1|Acanthus mollis L. |NA                 |NA          |Acanthaceae |D       |1998   |2016    |E AF       |X               |NA              |X               |Cas.    |Hort.   |species       |http://ipni.org/urn:lsid:ipni.org:names:44892-1 |alien-plants-belgium:taxon:509ddbbaa5ecbb8d91899905cfc9491c |Belgium  |S        |present              |1998       |2016     |1998/2016 |1998/2016     |casual             |Africa (WGSRPD:2) |native range |
 
 #### Pathway (pathway of introduction) 
 
@@ -1248,37 +1342,37 @@ pathway_desc %>%
 
 |value           |mapped_value                                  | records|
 |:---------------|:---------------------------------------------|-------:|
-|                |                                              |     165|
-|Ö               |                                              |     380|
-|agric.          |cbd_2014_pathway:escape_agriculture           |      86|
-|bird seed       |cbd_2014_pathway:contaminant_seed             |       1|
-|birdseed        |cbd_2014_pathway:contaminant_seed             |      31|
-|bulbs           |                                              |       1|
-|coconut mats    |cbd_2014_pathway:contaminant_seed             |       1|
-|etc.            |                                              |       1|
-|fish            |                                              |       3|
-|food refuse     |cbd_2014_pathway:escape_food_bait             |      23|
-|grain           |cbd_2014_pathway:contaminant_seed             |     543|
-|grain (rice)    |cbd_2014_pathway:contaminant_seed             |       3|
-|grass seed      |cbd_2014_pathway:contaminant_seed             |       8|
-|hay             |                                              |       1|
-|hort            |cbd_2014_pathway:escape_horticulture          |       2|
-|hort.           |cbd_2014_pathway:escape_horticulture          |    1106|
-|hybridization   |                                              |      50|
-|military troops |                                              |       9|
-|nurseries       |cbd_2014_pathway:contaminant_nursery          |      21|
-|ore             |cbd_2014_pathway:contaminant_habitat_material |      94|
-|pines           |cbd_2014_pathway:contaminant_on_plants        |       4|
-|rice            |                                              |       1|
-|salt            |                                              |       2|
-|seeds           |cbd_2014_pathway:contaminant_seed             |      64|
-|timber          |cbd_2014_pathway:contaminant_timber           |      10|
-|tourists        |cbd_2014_pathway:stowaway_people_luggage      |      10|
-|traffic         |                                              |       4|
-|urban weed      |cbd_2014_pathway:stowaway                     |      10|
-|waterfowl       |cbd_2014_pathway:contaminant_on_animals       |      14|
-|wool            |cbd_2014_pathway:contaminant_on_animals       |     566|
-|wool alien      |cbd_2014_pathway:contaminant_on_animals       |       1|
+|                |                                              |     406|
+|Ö               |                                              |    1263|
+|agric.          |cbd_2014_pathway:escape_agriculture           |     303|
+|bird seed       |cbd_2014_pathway:contaminant_seed             |       2|
+|birdseed        |cbd_2014_pathway:contaminant_seed             |      92|
+|bulbs           |                                              |       2|
+|coconut mats    |cbd_2014_pathway:contaminant_seed             |       2|
+|etc.            |                                              |       3|
+|fish            |                                              |       6|
+|food refuse     |cbd_2014_pathway:escape_food_bait             |      63|
+|grain           |cbd_2014_pathway:contaminant_seed             |    1594|
+|grain (rice)    |cbd_2014_pathway:contaminant_seed             |       7|
+|grass seed      |cbd_2014_pathway:contaminant_seed             |      19|
+|hay             |                                              |       4|
+|hort            |cbd_2014_pathway:escape_horticulture          |       6|
+|hort.           |cbd_2014_pathway:escape_horticulture          |    2989|
+|hybridization   |                                              |     131|
+|military troops |                                              |      22|
+|nurseries       |cbd_2014_pathway:contaminant_nursery          |      57|
+|ore             |cbd_2014_pathway:contaminant_habitat_material |     287|
+|pines           |cbd_2014_pathway:contaminant_on_plants        |      11|
+|rice            |                                              |       2|
+|salt            |                                              |       6|
+|seeds           |cbd_2014_pathway:contaminant_seed             |     186|
+|timber          |cbd_2014_pathway:contaminant_timber           |      29|
+|tourists        |cbd_2014_pathway:stowaway_people_luggage      |      24|
+|traffic         |                                              |      12|
+|urban weed      |cbd_2014_pathway:stowaway                     |      30|
+|waterfowl       |cbd_2014_pathway:contaminant_on_animals       |      44|
+|wool            |cbd_2014_pathway:contaminant_on_animals       |    1554|
+|wool alien      |cbd_2014_pathway:contaminant_on_animals       |       2|
 
 Drop `key`,`value` and `cbd_stand` column:
 
@@ -1316,18 +1410,18 @@ pathway_desc %>%
 
 |description                                   | records|
 |:---------------------------------------------|-------:|
-|                                              |     617|
-|cbd_2014_pathway:contaminant_habitat_material |      94|
-|cbd_2014_pathway:contaminant_nursery          |      21|
-|cbd_2014_pathway:contaminant_on_animals       |     581|
-|cbd_2014_pathway:contaminant_on_plants        |       4|
-|cbd_2014_pathway:contaminant_seed             |     651|
-|cbd_2014_pathway:contaminant_timber           |      10|
-|cbd_2014_pathway:escape_agriculture           |      86|
-|cbd_2014_pathway:escape_food_bait             |      23|
-|cbd_2014_pathway:escape_horticulture          |    1108|
-|cbd_2014_pathway:stowaway                     |      10|
-|cbd_2014_pathway:stowaway_people_luggage      |      10|
+|                                              |    1857|
+|cbd_2014_pathway:contaminant_habitat_material |     287|
+|cbd_2014_pathway:contaminant_nursery          |      57|
+|cbd_2014_pathway:contaminant_on_animals       |    1600|
+|cbd_2014_pathway:contaminant_on_plants        |      11|
+|cbd_2014_pathway:contaminant_seed             |    1902|
+|cbd_2014_pathway:contaminant_timber           |      29|
+|cbd_2014_pathway:escape_agriculture           |     303|
+|cbd_2014_pathway:escape_food_bait             |      63|
+|cbd_2014_pathway:escape_horticulture          |    2995|
+|cbd_2014_pathway:stowaway                     |      30|
+|cbd_2014_pathway:stowaway_people_luggage      |      24|
 
 Keep only non-empty descriptions:
 
@@ -1340,9 +1434,10 @@ pathway_desc %<>% filter(!is.na(description) & description != "")
 
 
 ```r
-description_ext <- bind_rows(origin, native_range, pathway_desc)
+description_ext <- bind_rows(invasion_stage, native_range, pathway_desc)
 ```
 
+The description extension applies to records 
 ### Term mapping
 
 Map the source data to [Taxon Description](http://rs.gbif.org/extension/gbif/1.0/description.xml):
@@ -1417,18 +1512,18 @@ kable(head(description_ext, 10))
 
 
 
-|taxonID                                                     |description                          |type         |language |
-|:-----------------------------------------------------------|:------------------------------------|:------------|:--------|
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |vagrant                              |origin       |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |temperate Asia (WGSRPD:3)            |native range |en       |
-|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |cbd_2014_pathway:escape_horticulture |pathway      |en       |
-|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |vagrant                              |origin       |en       |
-|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |temperate Asia (WGSRPD:3)            |native range |en       |
-|alien-plants-belgium:taxon:0046a7ee2325ad057382bd9fd726cef9 |cbd_2014_pathway:escape_horticulture |pathway      |en       |
-|alien-plants-belgium:taxon:004f8d63026942a6baf80b67b6d40b98 |vagrant                              |origin       |en       |
-|alien-plants-belgium:taxon:004f8d63026942a6baf80b67b6d40b98 |Northern America (WGSRPD:7)          |native range |en       |
-|alien-plants-belgium:taxon:004f8d63026942a6baf80b67b6d40b98 |cbd_2014_pathway:escape_horticulture |pathway      |en       |
-|alien-plants-belgium:taxon:0057c474d19804c969845b5697f69148 |introduced                           |origin       |en       |
+|taxonID                                                     |location |presence |raw_occurrenceStatus |start_year |end_year |Date      |raw_eventDate |raw_invasion_stage |description               |type           |language |
+|:-----------------------------------------------------------|:--------|:--------|:--------------------|:----------|:--------|:---------|:-------------|:------------------|:-------------------------|:--------------|:--------|
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Flanders |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Wallonia |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Brussels |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Belgium  |S        |present              |1944       |2017     |1944/2017 |1944/2017     |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Flanders |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Wallonia |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Brussels |M        |present              |1944       |2017     |1944/2017 |              |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Belgium  |S        |present              |1944       |2017     |1944/2017 |1944/2017     |casual             |casual                    |invasion stage |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Flanders |M        |present              |1944       |2017     |1944/2017 |              |casual             |temperate Asia (WGSRPD:3) |native range   |en       |
+|alien-plants-belgium:taxon:0005624db3a63ca28d63626bbe47e520 |Wallonia |M        |present              |1944       |2017     |1944/2017 |              |casual             |temperate Asia (WGSRPD:3) |native range   |en       |
 
 Save to CSV:
 
@@ -1441,10 +1536,10 @@ write.csv(description_ext, file = dwc_description_file, na = "", row.names = FAL
 
 ### Number of records
 
-* Source file: 2522
+* Source file: 6816
 * Taxon core: 2522
-* Distribution extension: 6816
-* Description extension: 8871
+* Distribution extension: 27384
+* Description extension: 31573
 
 ### Taxon core
 
