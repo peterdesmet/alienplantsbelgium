@@ -169,7 +169,7 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
 #' Why do we provide this information here?
 #' 
 #' 1. Information on the occurrences is given for the **regions**, while date information is given for **Belgium** as a whole. Some transformations and clarifications are needed.
-#' 2. Date information is needed for both the distribution and description extension (see 3). We do de cleaning and mapping.
+#' 2. Date information is needed for both the distribution and description extension (see 3). We do the cleaning and mapping here.
 #' 3. In some cases, the mapping of `eventDate`, `presence status` and `invasion stage` is linked (e.g. the `occurrenceStatus` of a species depends on its `invasion stage`. 
 #' 
 #' ### occurrenceStatus
@@ -259,12 +259,11 @@ raw_data %<>% filter (!presence == "NA")
 
 #' Map values using [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources):
 raw_data %<>% mutate(raw_occurrenceStatus = recode(presence,
-                                                   "S" = "present",
-                                                   "M" = "present",
-                                                   "?" = "presence uncertain",
-                                                   "NA" = "absent",
-                                                   .default = "",
-                                                   .missing = "absent"
+   "S" = "present",
+   "M" = "present",
+   "?" = "presence uncertain",
+   "NA" = "absent",
+   .default = "",
 ))
 
 
@@ -379,21 +378,21 @@ raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
 
 #' ...and **after** the last observation (`eventDate` = most recent observation - current date).
 #' For extinct species, we also need to specify that a species is absent **after** the last observation. 
-#' Thus, for some taxa, we need to add some **extra lines** with extra nformation on `invasion stage`, `eventDate` (most recent observation - current date) and `occurrenceStatus`.
+#' Thus, for some taxa, we need to add some **extra lines** with information on `invasion stage`, `eventDate` (most recent observation - current date) and `occurrenceStatus`.
 #' For this, we use a stepwise approach:
 
 #' 1. Save two subsets of `raw_data` as a separate datasets:
-#' - `extinct` = extinct species exclusively.
-#' - `ext.cas` = extinct/casual species exclusively
+#' - `raw_extinct` = extinct species exclusively.
+#' - `raw_ext.cas` = extinct/casual species exclusively
 #' 2. Distribution extension (`distribution`, a copy of `raw_data`)
 #' - `occurrenceStatus` and `eventDate` are already mapped for all species **within** the range of the first and most recent record) (`raw_occurrenceStatus` and `raw_eventDate`).  
-#' - Add `occurrenceStatus` and `eventDate` to `extinct`. (for all extinct species **after** the most recent record)
+#' - Add `occurrenceStatus` and `eventDate` to `extinct` (copy of `raw_extinct) (for all extinct species **after** the most recent record)
 #' - Bind `distribution` and `extinct` by rows.
 #' - Map the other Darwin Core terms.
 #' 3. Map invasion stage (part of the description extension, paragraph xxx`)
 #' - invasion stage is already mapped for all species **within** the range of the first and most recent record) (`raw_invasion_stage`)
 #' - Add invasion stage to `extinct` and `ext.cas`. 
-#' - Bind `invasion stage`, `extinct`, and `ext.cas`
+#' - Bind `invasion stage`, `extinct`, and `ext.cas` (copy of `raw_ext.cas`)
 #' - Map pathway of introduction and native range, create description extension.
 
 #' This is a schematic overview of how we combine information in `raw_data` to map `eventDate`, `occurrenceStatus` and `invasion stage`:
@@ -401,8 +400,8 @@ raw_data %<>% mutate(raw_invasion_stage = recode(raw_invasion_stage,
 #' Include this in the Rmd: ![_Schematic overview of the mapping process_](mapping_scheme_MAP.png)
 
 #' #### Create `extinct` and `ext-cas`:
-extinct <- raw_data %>% filter(raw_d_n == "Ext.")
-ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
+raw_extinct <- raw_data %>% filter(raw_d_n == "Ext.")
+raw_ext.cas <- raw_data %>% filter(raw_d_n == "Ext./Cas.")
 
 #' ## Create distribution extension
 
@@ -419,7 +418,7 @@ extinct %<>% mutate(occurrenceStatus = "absent")
 
 #' #### occurrenceStatus and eventDate
 
-#' occurrenceStatus has already been mapped in `raw_occurrenceStatus` for all species **within** the range of the first and most recent record.
+#' occurrenceStatus and eventDate have already been mapped in `raw_occurrenceStatus` for all species **within** the range of the first and most recent record.
 #' Extinct species are absent **after** the most recent record (see also `eventDate` mapping):
 
 #' Species within the range of the first and most recent record.
@@ -427,6 +426,7 @@ distribution %<>% mutate(occurrenceStatus = raw_occurrenceStatus)
 distribution %<>% mutate(eventDate = raw_eventDate)
 
 #' All extinct species **after** the most recent record.
+extinct <- raw_extinct
 extinct %<>% mutate(occurrenceStatus = "absent") #' for all extinct species **after** the most recent record.
 extinct %<>% mutate(eventDate = paste(end_year, current_year, sep = "/"))
 
@@ -488,8 +488,6 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 #' ## Create description extension
 #' 
 #' In the description extension we want to include **invasion stage** (`raw_d_n`), **native range** (`raw_origin`) and **pathway** (`raw_v_i``) information. We'll create a separate data frame for all and then combine these with union.
-#' 
-#' ### Pre-processing
 #' 
 #' #### Invasion stage
 #' 
